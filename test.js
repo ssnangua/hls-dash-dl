@@ -4,11 +4,37 @@ const DASH =
 
 const Downloader = require("./");
 
+// const dl = new Downloader({
+//   ffmpegPath: "./bin/ffmpeg.exe",
+//   quality: "highest", // "highest" | "medium" | "lowest"
+//   concurrency: 5,
+// });
+
+const fs = require("node:fs");
+const logFile = "./log.txt";
 const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
-  quality: "highest", // "highest" | "medium" | "lowest"
-  concurrency: 5,
+  // logger: null, // silence
+  logger: {
+    _groupFlag: false,
+    group(...args) {
+      this._groupFlag = true;
+      fs.appendFileSync(logFile, args.join(" ") + "\n");
+    },
+    groupEnd() {
+      this._groupFlag = false;
+      fs.appendFileSync(logFile, "\n");
+    },
+    log(...args) {
+      fs.appendFileSync(logFile, (this._groupFlag ? "  " : "") + args.join(" ") + "\n");
+    },
+    error(...args) {
+      this.log(...args);
+    },
+  },
 });
+
+// dl.download(DASH, "./DASH.mkv");
 
 dl.download(DASH, "./DASH.mkv", (event, data) => {
   // console.log(event, data);

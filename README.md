@@ -33,17 +33,45 @@ dl.parse(HLS, "./HLS.mkv").then((video_info) => {
 });
 ```
 
+```javascript
+// logger example
+const fs = require("node:fs");
+const logFile = "./log.txt";
+const dl = new Downloader({
+  ffmpegPath: "./bin/ffmpeg.exe",
+  // logger: null, // silence
+  logger: {
+    _groupFlag: false,
+    group(...args) {
+      this._groupFlag = true;
+      fs.appendFileSync(logFile, args.join(" ") + "\n");
+    },
+    groupEnd() {
+      this._groupFlag = false;
+      fs.appendFileSync(logFile, "\n");
+    },
+    log(...args) {
+      fs.appendFileSync(logFile, (this._groupFlag ? "  " : "") + args.join(" ") + "\n");
+    },
+    error(...args) {
+      this.log(...args);
+    },
+  },
+});
+```
+
 ## API
 
 ### `new Downloader(options?)`
 
 **options**
 
-- `ffmpegPath?` string- FFmpeg executable file path (download [here](https://ffmpeg.org/download.html)). Default by `ffmpeg.exe` (in the `Path` of the system environment variables).
+- `ffmpegPath?` string - FFmpeg executable file path (download [here](https://ffmpeg.org/download.html)). Default by `ffmpeg.exe` (in the `Path` of the system environment variables).
 - `outDir?` string - Default output directory. Default by `Downloads` directory.
 - `quality?` string - Quality of video to download, can be `highest` | `medium` | `lowest`. Default by `highest`.
 - `concurrency?` number - Number of concurrent downloads of segments. Default by `5`.
 - `clean?` boolean - Clear temporary files after download is complete. Default by `true`.
+- `logger?` console - Custom logger. Default by `console`. Set to `null` for silence.
 
 ### `downloader.download(url, outFile, handler?): Promise`
 

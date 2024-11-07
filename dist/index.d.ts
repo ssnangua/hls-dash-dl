@@ -6,8 +6,16 @@ interface DL_Options {
     quality?: "highest" | "medium" | "lowest";
     concurrency?: number;
     clean?: boolean;
+    logger?: any;
 }
-type DL_Handler = (event: string, data: any) => void;
+declare enum DL_Event {
+    VIDEO_INFO = "video_info",
+    FFMPEG_SPAWN = "ffmpeg_spawn",
+    FFMPEG_CLOSE = "ffmpeg_close",
+    FFMPEG_ERROR = "ffmpeg_error",
+    FFMPEG_DATA = "ffmpeg_data"
+}
+type DL_Handler = (event: DL_Event, data: any) => void;
 declare enum TrackType {
     VIDEO = "video",
     AUDIO = "audio",
