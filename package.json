@@ -1,0 +1,42 @@
+{
+  "name": "hls-dash-dl",
+  "version": "1.0.0",
+  "description": "HLS(.m3u8) and DASH(.mpd) video streaming download tool.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "hls",
+    "m3u8",
+    "dash",
+    "mpd",
+    "streaming",
+    "video",
+    "download"
+  ],
+  "author": "ssnangua",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ssnangua/hls-dash-dl"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "dasha": "^3.1.0"
+  }
+}
