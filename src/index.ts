@@ -146,7 +146,8 @@ class Downloader {
         ? videos.length - 1
         : Math.round(videos.length / 2);
 
-    const { dir = this.#options.outDir, name, ext } = path.parse(outFile);
+    let { dir, name, ext } = path.parse(outFile);
+    dir ||= this.#options.outDir;
     const tmpDir = path.resolve(dir, name);
     const file = path.resolve(dir, `${name}${ext}`);
 
@@ -173,8 +174,7 @@ class Downloader {
     const segments: DL_Segment[] = track.segments.map((segment, index) =>
       this.#getDlSegment(type, trackIndex, segment, index, tmpDir)
     );
-    // if subtitle, convert to srt, otherwise use first segment's extension
-    const ext = type === TrackType.TEXT ? ".srt" : path.extname(segments[0].file);
+    const ext = path.extname(segments[0].file);
     const file = path.resolve(tmpDir, `${type}${trackIndex}${ext}`);
     const { bitrate, quality, language, label } = track as any;
     return { type, segments, file, bitrate, quality, language, label };
@@ -233,35 +233,14 @@ class Downloader {
   async #concatSegments(dlTrack: DL_Track, dlVideo: DL_Video) {
     const { type, segments, file } = dlTrack;
 
-    // if video or audio, concat segments into one file
-    if (type === TrackType.VIDEO || type === TrackType.AUDIO) {
-      if (segments.length > 1) {
-        this.#options?.logger?.log("Concat Segments...");
-        for (let i = 0; i < segments.length; i++) {
-          const buffer = fs.readFileSync(segments[i].file);
-          fs.appendFileSync(file, buffer);
-        }
-      } else {
-        fs.renameSync(segments[0].file, file);
+    if (segments.length > 1) {
+      this.#options?.logger?.log("Concat Segments...");
+      for (let i = 0; i < segments.length; i++) {
+        const buffer = fs.readFileSync(segments[i].file);
+        fs.appendFileSync(file, buffer);
       }
     } else {
-      // if subtitle, concat segments into one file and convert to srt
-      const args = [];
-      let input;
-      if (segments.length > 1) {
-        this.#options?.logger?.log("Concat Segments...");
-        // ffmpeg.exe -f concat -i list.txt -c copy output.*
-        args.push("-f", "concat");
-        args.push("-safe", "0"); // allow absolute path
-        const listFile = path.resolve(path.dirname(segments[0].file), "segments.txt");
-        const data = segments.map(({ file }) => `file '${file.replace(/\\/g, "/")}'`).join("\n");
-        fs.writeFileSync(listFile, data);
-        input = listFile;
-      } else {
-        input = segments[0].file;
-      }
-      args.push("-i", input, "-c:s", "srt", file, "-y");
-      await this.#execFFmpeg(args, dlVideo);
+      fs.renameSync(segments[0].file, file);
     }
   }
 

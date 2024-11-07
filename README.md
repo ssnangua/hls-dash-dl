@@ -22,6 +22,7 @@ const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
   quality: "highest", // "highest" | "medium" | "lowest"
   concurrency: 5,
+  clean: true,
 });
 
 dl.download(DASH, "./DASH.mkv", (event, data) => {

@@ -64,7 +64,8 @@ var Downloader = class {
     (_j = (_i = this.#options) == null ? void 0 : _i.logger) == null ? void 0 : _j.groupEnd();
     videos.sort((a, b) => b.bitrate.bps - a.bitrate.bps);
     const qualityIndex = this.#options.quality === "highest" ? 0 : this.#options.quality === "lowest" ? videos.length - 1 : Math.round(videos.length / 2);
-    const { dir = this.#options.outDir, name, ext } = path.parse(outFile);
+    let { dir, name, ext } = path.parse(outFile);
+    dir ||= this.#options.outDir;
     const tmpDir = path.resolve(dir, name);
     const file = path.resolve(dir, `${name}${ext}`);
     const videoTrack = this.#getDlTrack("video" /* VIDEO */, videos[qualityIndex], qualityIndex, tmpDir);
@@ -88,7 +89,7 @@ var Downloader = class {
     const segments = track.segments.map(
       (segment, index) => this.#getDlSegment(type, trackIndex, segment, index, tmpDir)
     );
-    const ext = type === "text" /* TEXT */ ? ".srt" : path.extname(segments[0].file);
+    const ext = path.extname(segments[0].file);
     const file = path.resolve(tmpDir, `${type}${trackIndex}${ext}`);
     const { bitrate, quality, language, label } = track;
     return { type, segments, file, bitrate, quality, language, label };
@@ -133,34 +134,16 @@ var Downloader = class {
     return this.#downloadSegment(dlSegments, onDownloaded);
   }
   async #concatSegments(dlTrack, dlVideo) {
-    var _a, _b, _c, _d;
+    var _a, _b;
     const { type, segments, file } = dlTrack;
-    if (type === "video" /* VIDEO */ || type === "audio" /* AUDIO */) {
-      if (segments.length > 1) {
-        (_b = (_a = this.#options) == null ? void 0 : _a.logger) == null ? void 0 : _b.log("Concat Segments...");
-        for (let i = 0; i < segments.length; i++) {
-          const buffer = fs.readFileSync(segments[i].file);
-          fs.appendFileSync(file, buffer);
-        }
-      } else {
-        fs.renameSync(segments[0].file, file);
+    if (segments.length > 1) {
+      (_b = (_a = this.#options) == null ? void 0 : _a.logger) == null ? void 0 : _b.log("Concat Segments...");
+      for (let i = 0; i < segments.length; i++) {
+        const buffer = fs.readFileSync(segments[i].file);
+        fs.appendFileSync(file, buffer);
       }
     } else {
-      const args = [];
-      let input;
-      if (segments.length > 1) {
-        (_d = (_c = this.#options) == null ? void 0 : _c.logger) == null ? void 0 : _d.log("Concat Segments...");
-        args.push("-f", "concat");
-        args.push("-safe", "0");
-        const listFile = path.resolve(path.dirname(segments[0].file), "segments.txt");
-        const data = segments.map(({ file: file2 }) => `file '${file2.replace(/\\/g, "/")}'`).join("\n");
-        fs.writeFileSync(listFile, data);
-        input = listFile;
-      } else {
-        input = segments[0].file;
-      }
-      args.push("-i", input, "-c:s", "srt", file, "-y");
-      await this.#execFFmpeg(args, dlVideo);
+      fs.renameSync(segments[0].file, file);
     }
   }
   #multiplexingTracks(dlVideo) {
