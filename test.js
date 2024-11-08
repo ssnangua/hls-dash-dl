@@ -6,9 +6,13 @@ const Downloader = require("./");
 
 const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
-  quality: "highest", // "highest" | "medium" | "lowest"
-  concurrency: 5,
-  clean: true,
+  // quality: "highest", // "highest" | "medium" | "lowest"
+  // concurrency: 5,
+  // videoCodec: "copy",
+  // audioCodec: "copy",
+  // subtitleCodec: "srt",
+  // clean: true,
+  // logger: console,
 });
 
 // const fs = require("node:fs");
@@ -35,13 +39,25 @@ const dl = new Downloader({
 //   },
 // });
 
-// dl.download(DASH, "./DASH.mkv");
+// dl.download(DASH, "./DASH.mkv").then((video_info) => {
+//   console.log(video_info);
+// });
 
 dl.download(DASH, "./DASH.mkv", (event, data) => {
-  // console.log(event, data);
+  if (event === "video_info") {
+    const { video_info } = data;
+  } else if (event === "ffmpeg_spawn") {
+    const { process, cwd, command, args } = data;
+  } else if (event === "ffmpeg_data") {
+    // console.log(`Stderr: ${data.data}`);
+  } else if (event === "ffmpeg_close") {
+    const { code } = data;
+  } else if (event === "ffmpeg_error") {
+    const { error } = data;
+  }
 });
 
 // dl.parse(HLS, "./HLS.mkv").then((video_info) => {
 //   console.log(video_info);
-//   require("node:fs").writeFileSync("./manifest.json", JSON.stringify(video_info, null, 2));
+//   // require("node:fs").writeFileSync("./manifest.json", JSON.stringify(video_info, null, 2));
 // });

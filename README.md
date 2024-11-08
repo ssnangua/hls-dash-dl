@@ -20,17 +20,37 @@ const Downloader = require("hls-dash-dl");
 
 const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
-  quality: "highest", // "highest" | "medium" | "lowest"
-  concurrency: 5,
-  clean: true,
+  // quality: "highest", // "highest" | "medium" | "lowest"
+  // concurrency: 5,
+  // videoCodec: "copy",
+  // audioCodec: "copy",
+  // subtitleCodec: "srt",
+  // clean: true,
 });
 
-dl.download(DASH, "./DASH.mkv", (event, data) => {
-  // console.log(event, data);
+dl.download(DASH, "./DASH.mkv").then((video_info) => {
+  console.log(video_info);
 });
 
 dl.parse(HLS, "./HLS.mkv").then((video_info) => {
   console.log(video_info);
+});
+```
+
+```javascript
+// handler example
+dl.download(DASH, "./DASH.mkv", (event, data) => {
+  if (event === "video_info") {
+    const { video_info } = data;
+  } else if (event === "ffmpeg_spawn") {
+    const { process, cwd, command, args } = data;
+  } else if (event === "ffmpeg_data") {
+    // console.log(`Stderr: ${data.data}`);
+  } else if (event === "ffmpeg_close") {
+    const { code } = data;
+  } else if (event === "ffmpeg_error") {
+    const { error } = data;
+  }
 });
 ```
 
@@ -40,8 +60,9 @@ const fs = require("node:fs");
 const logFile = "./log.txt";
 const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
+  // logger: console, // default
   // logger: null, // silence
-  logger: {
+  logger: { // custom
     _groupFlag: false,
     group(...args) {
       this._groupFlag = true;
@@ -73,6 +94,9 @@ const dl = new Downloader({
 - `concurrency?` number - Number of concurrent downloads of segments. Default by `5`.
 - `clean?` boolean - Clear temporary files after download is complete. Default by `true`.
 - `logger?` console - Custom logger. Default by `console`. Set to `null` for silence.
+- `videoCodec?` string - Video Codec. Default by `copy`.
+- `audioCodec?` string - Audio Codec. Default by `copy`.
+- `subtitleCodec?` string - Subtitle Codec. Default by `srt`.
 
 ### `downloader.download(url, outFile, handler?): Promise`
 
@@ -101,8 +125,12 @@ Resolves with `video_info`.
   ffmpegPath: './bin/ffmpeg.exe',
   outDir: 'C:\\Users\\ssnangua\\Downloads',
   quality: 'highest',
+  videoCodec: 'copy',
+  audioCodec: 'copy',
+  subtitleCodec: 'srt',
   concurrency: 5,
   clean: true,
+  logger: { /*...*/ },
   url: 'https://.../*.mpd',
   handler: (event, data) => { /*...*/ },
   manifest: { /*...*/ }, // dasha library Manifest object
@@ -154,7 +182,7 @@ Resolves with `video_info`.
         },
         /*...*/
       ],
-      file: 'E:\\GitHub\\hls-dash-dl\\DASH\\text0.srt',
+      file: 'E:\\GitHub\\hls-dash-dl\\DASH\\text0.vtt',
       bitrate: { /*...*/ },
       quality: undefined,
       language: 'en',
