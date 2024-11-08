@@ -4,40 +4,39 @@ const DASH =
 
 const Downloader = require("./");
 
-const dl = new Downloader({
-  ffmpegPath: "./bin/ffmpeg.exe",
-  // quality: "highest", // "highest" | "medium" | "lowest"
-  // concurrency: 5,
-  // videoCodec: "copy",
-  // audioCodec: "copy",
-  // subtitleCodec: "srt",
-  // clean: true,
-  // logger: console,
-});
-
-// const fs = require("node:fs");
-// const logFile = "./log.txt";
 // const dl = new Downloader({
 //   ffmpegPath: "./bin/ffmpeg.exe",
-//   // logger: null, // silence
-//   logger: {
-//     _groupFlag: false,
-//     group(...args) {
-//       this._groupFlag = true;
-//       fs.appendFileSync(logFile, args.join(" ") + "\n");
-//     },
-//     groupEnd() {
-//       this._groupFlag = false;
-//       fs.appendFileSync(logFile, "\n");
-//     },
-//     log(...args) {
-//       fs.appendFileSync(logFile, (this._groupFlag ? "  " : "") + args.join(" ") + "\n");
-//     },
-//     error(...args) {
-//       this.log(...args);
-//     },
-//   },
+//   // quality: "highest", // "highest" | "medium" | "lowest"
+//   // concurrency: 5,
+//   // videoCodec: "copy",
+//   // audioCodec: "copy",
+//   // subtitleCodec: "srt",
+//   // clean: true,
+//   // logger: null,
 // });
+
+const fs = require("node:fs");
+const logFile = "./log.txt";
+const dl = new Downloader({
+  ffmpegPath: "./bin/ffmpeg.exe",
+  // logger: null, // silence
+  logger: {
+    _groupFlag: false,
+    group(...args) {
+      this._groupFlag = true;
+      fs.appendFileSync(logFile, args.join(" ") + "\n");
+    },
+    groupEnd() {
+      this._groupFlag = false;
+    },
+    log(...args) {
+      fs.appendFileSync(logFile, (this._groupFlag ? "  " : "") + args.join(" ") + "\n");
+    },
+    error(...args) {
+      this.log(...args);
+    },
+  },
+});
 
 // dl.download(DASH, "./DASH.mkv").then((video_info) => {
 //   console.log(video_info);

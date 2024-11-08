@@ -4,10 +4,10 @@ interface DL_Options {
     ffmpegPath?: string;
     outDir?: string;
     quality?: "highest" | "medium" | "lowest";
+    concurrency?: number;
     videoCodec?: string;
     audioCodec?: string;
     subtitleCodec?: string;
-    concurrency?: number;
     clean?: boolean;
     logger?: any;
 }

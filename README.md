@@ -70,7 +70,6 @@ const dl = new Downloader({
     },
     groupEnd() {
       this._groupFlag = false;
-      fs.appendFileSync(logFile, "\n");
     },
     log(...args) {
       fs.appendFileSync(logFile, (this._groupFlag ? "  " : "") + args.join(" ") + "\n");
