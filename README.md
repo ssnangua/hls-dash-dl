@@ -62,17 +62,18 @@ const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
   // logger: console, // default
   // logger: null, // silence
-  logger: { // custom
-    _groupFlag: false,
+  logger: {
+    indentSize: 2,
+    indent: 0,
     group(...args) {
-      this._groupFlag = true;
+      this.indent += 1;
       fs.appendFileSync(logFile, args.join(" ") + "\n");
     },
     groupEnd() {
-      this._groupFlag = false;
+      this.indent -= 1;
     },
     log(...args) {
-      fs.appendFileSync(logFile, (this._groupFlag ? "  " : "") + args.join(" ") + "\n");
+      fs.appendFileSync(logFile, " ".repeat(this.indent * this.indentSize) + args.join(" ") + "\n");
     },
     error(...args) {
       this.log(...args);
