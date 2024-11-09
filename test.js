@@ -4,59 +4,59 @@ const DASH =
 
 const Downloader = require("./");
 
-// const dl = new Downloader({
-//   ffmpegPath: "./bin/ffmpeg.exe",
-//   // quality: "highest", // "highest" | "medium" | "lowest"
-//   // concurrency: 5,
-//   // videoCodec: "copy",
-//   // audioCodec: "copy",
-//   // subtitleCodec: "srt",
-//   // clean: true,
-//   // logger: null,
-// });
-
-const fs = require("node:fs");
-const logFile = "./log.txt";
 const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
-  // logger: console, // default
-  // logger: null, // silence
-  logger: {
-    indentSize: 2,
-    indent: 0,
-    group(...args) {
-      this.indent += 1;
-      fs.appendFileSync(logFile, args.join(" ") + "\n");
-    },
-    groupEnd() {
-      this.indent -= 1;
-    },
-    log(...args) {
-      fs.appendFileSync(logFile, " ".repeat(this.indent * this.indentSize) + args.join(" ") + "\n");
-    },
-    error(...args) {
-      this.log(...args);
-    },
-  },
+  // quality: "highest", // "highest" | "medium" | "lowest"
+  // concurrency: 5,
+  // videoCodec: "copy",
+  // audioCodec: "copy",
+  // subtitleCodec: "srt",
+  // clean: true,
+  // logger: null,
 });
 
-// dl.download(DASH, "./DASH.mkv").then((video_info) => {
-//   console.log(video_info);
+// const fs = require("node:fs");
+// const logFile = "./log.txt";
+// const dl = new Downloader({
+//   ffmpegPath: "./bin/ffmpeg.exe",
+//   // logger: console, // default
+//   // logger: null, // silence
+//   logger: {
+//     indentSize: 2,
+//     indent: 0,
+//     group(...args) {
+//       this.indent += 1;
+//       fs.appendFileSync(logFile, args.join(" ") + "\n");
+//     },
+//     groupEnd() {
+//       this.indent -= 1;
+//     },
+//     log(...args) {
+//       fs.appendFileSync(logFile, " ".repeat(this.indent * this.indentSize) + args.join(" ") + "\n");
+//     },
+//     error(...args) {
+//       this.log(...args);
+//     },
+//   },
 // });
 
-dl.download(DASH, "./DASH.mkv", (event, data) => {
-  if (event === "video_info") {
-    const { video_info } = data;
-  } else if (event === "ffmpeg_spawn") {
-    const { process, cwd, command, args } = data;
-  } else if (event === "ffmpeg_data") {
-    // console.log(`Stderr: ${data.data}`);
-  } else if (event === "ffmpeg_close") {
-    const { code } = data;
-  } else if (event === "ffmpeg_error") {
-    const { error } = data;
-  }
+dl.download(DASH, "./DASH.mkv").then((video_info) => {
+  console.log(video_info);
 });
+
+// dl.download(DASH, "./DASH.mkv", (event, data) => {
+//   if (event === "video_info") {
+//     const { video_info } = data;
+//   } else if (event === "ffmpeg_spawn") {
+//     const { process, cwd, command, args } = data;
+//   } else if (event === "ffmpeg_data") {
+//     // console.log(`Stderr: ${data.data}`);
+//   } else if (event === "ffmpeg_close") {
+//     const { code } = data;
+//   } else if (event === "ffmpeg_error") {
+//     const { error } = data;
+//   }
+// });
 
 // dl.parse(HLS, "./HLS.mkv").then((video_info) => {
 //   console.log(video_info);

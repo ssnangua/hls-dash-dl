@@ -34,9 +34,9 @@ var Downloader = class {
       await this.#downloadTrack(dlVideo.audio[i], dlVideo);
       logger == null ? void 0 : logger.groupEnd();
     }
-    for (let i = 0; i < dlVideo.text.length; i++) {
-      logger == null ? void 0 : logger.group(`Downloading Subtitle Tracks (${i + 1}/${dlVideo.text.length})...`);
-      await this.#downloadTrack(dlVideo.text[i], dlVideo);
+    for (let i = 0; i < dlVideo.subtitle.length; i++) {
+      logger == null ? void 0 : logger.group(`Downloading Subtitle Tracks (${i + 1}/${dlVideo.subtitle.length})...`);
+      await this.#downloadTrack(dlVideo.subtitle[i], dlVideo);
       logger == null ? void 0 : logger.groupEnd();
     }
     logger == null ? void 0 : logger.group(`Multiplexing Tracks...`);
@@ -87,7 +87,7 @@ var Downloader = class {
     const videoIndex = this.#options.quality === "highest" ? 0 : this.#options.quality === "lowest" ? videos.length - 1 : Math.round(videos.length / 2);
     const videoTracks = [this.#getDlTrack("video" /* VIDEO */, videos[videoIndex], videoIndex, tmpDir)];
     const audioTracks = audios.map((track, index) => this.#getDlTrack("audio" /* AUDIO */, track, index, tmpDir));
-    const subtitleTracks = subtitles.map((track, index) => this.#getDlTrack("text" /* TEXT */, track, index, tmpDir));
+    const subtitleTracks = subtitles.map((track, index) => this.#getDlTrack("subtitle" /* SUBTITLE */, track, index, tmpDir));
     return {
       ...this.#options,
       url,
@@ -95,7 +95,7 @@ var Downloader = class {
       manifest,
       video: videoTracks,
       audio: audioTracks,
-      text: subtitleTracks,
+      subtitle: subtitleTracks,
       tmpDir,
       name,
       ext,
@@ -165,7 +165,7 @@ var Downloader = class {
   }
   #multiplexingTracks(dlVideo) {
     const { logger } = this.#options;
-    const { video: videoTracks, audio: audioTracks, text: subtitleTracks, file } = dlVideo;
+    const { video: videoTracks, audio: audioTracks, subtitle: subtitleTracks, file } = dlVideo;
     const args = [];
     args.push("-i", videoTracks[0].file);
     audioTracks.forEach((track) => args.push("-i", track.file));

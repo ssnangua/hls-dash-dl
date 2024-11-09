@@ -41,7 +41,7 @@ type DL_Handler = (event: DL_Event, data: any) => void;
 enum TrackType {
   VIDEO = "video",
   AUDIO = "audio",
-  TEXT = "text",
+  SUBTITLE = "subtitle",
 }
 
 enum Stat {
@@ -56,7 +56,7 @@ interface DL_Video extends DL_Options {
   manifest: Manifest;
   video: DL_Track[];
   audio: DL_Track[];
-  text: DL_Track[];
+  subtitle: DL_Track[];
   tmpDir: string;
   name: string;
   ext: string;
@@ -109,9 +109,9 @@ class Downloader {
     }
 
     // download subtitle tracks
-    for (let i = 0; i < dlVideo.text.length; i++) {
-      logger?.group(`Downloading Subtitle Tracks (${i + 1}/${dlVideo.text.length})...`);
-      await this.#downloadTrack(dlVideo.text[i], dlVideo);
+    for (let i = 0; i < dlVideo.subtitle.length; i++) {
+      logger?.group(`Downloading Subtitle Tracks (${i + 1}/${dlVideo.subtitle.length})...`);
+      await this.#downloadTrack(dlVideo.subtitle[i], dlVideo);
       logger?.groupEnd();
     }
 
@@ -184,7 +184,7 @@ class Downloader {
     // tracks
     const videoTracks = [this.#getDlTrack(TrackType.VIDEO, videos[videoIndex], videoIndex, tmpDir)];
     const audioTracks = audios.map((track, index) => this.#getDlTrack(TrackType.AUDIO, track, index, tmpDir));
-    const subtitleTracks = subtitles.map((track, index) => this.#getDlTrack(TrackType.TEXT, track, index, tmpDir));
+    const subtitleTracks = subtitles.map((track, index) => this.#getDlTrack(TrackType.SUBTITLE, track, index, tmpDir));
 
     return {
       ...this.#options,
@@ -193,7 +193,7 @@ class Downloader {
       manifest,
       video: videoTracks,
       audio: audioTracks,
-      text: subtitleTracks,
+      subtitle: subtitleTracks,
       tmpDir,
       name,
       ext,
@@ -281,7 +281,7 @@ class Downloader {
 
   #multiplexingTracks(dlVideo: DL_Video) {
     const { logger } = this.#options;
-    const { video: videoTracks, audio: audioTracks, text: subtitleTracks, file } = dlVideo;
+    const { video: videoTracks, audio: audioTracks, subtitle: subtitleTracks, file } = dlVideo;
 
     // add input tracks
     const args = [];

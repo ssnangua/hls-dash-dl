@@ -22,7 +22,7 @@ type DL_Handler = (event: DL_Event, data: any) => void;
 declare enum TrackType {
     VIDEO = "video",
     AUDIO = "audio",
-    TEXT = "text"
+    SUBTITLE = "subtitle"
 }
 declare enum Stat {
     WAITING = "waiting",
@@ -35,7 +35,7 @@ interface DL_Video extends DL_Options {
     manifest: Manifest;
     video: DL_Track[];
     audio: DL_Track[];
-    text: DL_Track[];
+    subtitle: DL_Track[];
     tmpDir: string;
     name: string;
     ext: string;

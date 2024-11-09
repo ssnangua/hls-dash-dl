@@ -190,7 +190,7 @@ Resolves with `video_info`.
     },
     /*...*/
   ],
-  tmpDir: 'E:\\GitHub\\hls-dash-dl\\DASH',
+  tmpDir: 'E:\\GitHub\\hls-dash-dl\\tmp-DASH',
   name: 'DASH',
   ext: '.mkv',
   file: 'E:\\GitHub\\hls-dash-dl\\DASH.mkv'
