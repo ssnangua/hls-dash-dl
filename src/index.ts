@@ -17,7 +17,7 @@ interface DL_Options {
 }
 
 const defaultDlOptions: DL_Options = {
-  ffmpegPath: "ffmpeg.exe",
+  ffmpegPath: process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg",
   outDir: path.resolve(os.homedir(), "Downloads"),
   quality: "highest",
   concurrency: 5,

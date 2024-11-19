@@ -88,7 +88,7 @@ const dl = new Downloader({
 
 **options**
 
-- `ffmpegPath?` string - FFmpeg executable file path (download [here](https://ffmpeg.org/download.html)). Default by `ffmpeg.exe` (in the `Path` of the system environment variables).
+- `ffmpegPath?` string - FFmpeg executable file path (download [here](https://ffmpeg.org/download.html)). Default by `ffmpeg` (in the `Path` of the system environment variables).
 - `outDir?` string - Default output directory. Default by `Downloads` directory.
 - `quality?` string - Quality of video to download, can be `highest` | `medium` | `lowest`. Default by `highest`.
 - `concurrency?` number - Number of concurrent downloads of segments. Default by `5`.
