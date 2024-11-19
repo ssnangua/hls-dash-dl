@@ -5,7 +5,7 @@ var _fs = require('fs'); var fs = _interopRequireWildcard(_fs);
 var _child_process = require('child_process');
 var _dasha = require('dasha');
 var defaultDlOptions = {
-  ffmpegPath: "ffmpeg.exe",
+  ffmpegPath: process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg",
   outDir: path.resolve(os.homedir(), "Downloads"),
   quality: "highest",
   concurrency: 5,
@@ -219,21 +219,21 @@ var Downloader = class {
       const { dir: cwd, base: command } = path.parse(dlVideo.ffmpegPath);
       logger == null ? void 0 : logger.group("Executing FFmpeg...");
       logger == null ? void 0 : logger.log(`Command: ${command} ${args.join(" ")}`);
-      const process = _child_process.spawn.call(void 0, command, args, { cwd });
-      dlVideo.handler("ffmpeg_spawn" /* FFMPEG_SPAWN */, { process, cwd, command, args });
-      process.on("close", (code) => {
+      const process2 = _child_process.spawn.call(void 0, command, args, { cwd });
+      dlVideo.handler("ffmpeg_spawn" /* FFMPEG_SPAWN */, { process: process2, cwd, command, args });
+      process2.on("close", (code) => {
         logger == null ? void 0 : logger.log(`Code: ${code}`);
         logger == null ? void 0 : logger.groupEnd();
         dlVideo.handler("ffmpeg_close" /* FFMPEG_CLOSE */, { code });
         resolve2(code);
       });
-      process.on("error", (error) => {
+      process2.on("error", (error) => {
         logger == null ? void 0 : logger.error(`Failed: ${error}`);
         logger == null ? void 0 : logger.groupEnd();
         dlVideo.handler("ffmpeg_error" /* FFMPEG_ERROR */, { error });
         reject(error);
       });
-      process.stderr.on("data", (data) => {
+      process2.stderr.on("data", (data) => {
         dlVideo.handler("ffmpeg_data" /* FFMPEG_DATA */, { data });
       });
     });
