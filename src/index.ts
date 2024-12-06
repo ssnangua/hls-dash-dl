@@ -3,9 +3,11 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { spawn, ChildProcess } from "node:child_process";
 import { parse as parseManifest, Manifest, Track, Segment, Bitrate } from "dasha";
+import { ttml2srt } from "ttml2srt";
 
-interface DL_Options {
+interface DL_Config {
   ffmpegPath?: string;
+  gpacPath?: string;
   outDir?: string;
   quality?: "highest" | "medium" | "lowest";
   concurrency?: number;
@@ -16,8 +18,9 @@ interface DL_Options {
   logger?: any;
 }
 
-const defaultDlOptions: DL_Options = {
+const defaultDlConfig: DL_Config = {
   ffmpegPath: process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg",
+  gpacPath: process.platform === "win32" ? "gpac.exe" : "gpac",
   outDir: path.resolve(os.homedir(), "Downloads"),
   quality: "highest",
   concurrency: 5,
@@ -30,10 +33,11 @@ const defaultDlOptions: DL_Options = {
 
 enum DL_Event {
   VIDEO_INFO = "video_info",
-  FFMPEG_SPAWN = "ffmpeg_spawn",
-  FFMPEG_CLOSE = "ffmpeg_close",
-  FFMPEG_ERROR = "ffmpeg_error",
-  FFMPEG_DATA = "ffmpeg_data",
+  CHILD_PROCESS_SPAWN = "child_process_spawn",
+  CHILD_PROCESS_CLOSE = "child_process_close",
+  CHILD_PROCESS_ERROR = "child_process_error",
+  CHILD_PROCESS_STDOUT = "child_process_stdout",
+  CHILD_PROCESS_STDERR = "child_process_stderr",
 }
 
 type DL_Handler = (event: DL_Event, data: any) => void;
@@ -50,75 +54,114 @@ enum Stat {
   DOWNLOADED = "downloaded",
 }
 
-interface DL_Video extends DL_Options {
-  url: string;
-  handler: DL_Handler;
+interface DL_Video extends DL_Config {
   manifest: Manifest;
-  video: DL_Track[];
-  audio: DL_Track[];
-  subtitle: DL_Track[];
+  text: string;
+  url: string;
+  keys: string | string[];
+  handler: DL_Handler;
   tmpDir: string;
+  dir: string;
   name: string;
   ext: string;
   file: string;
+  video: DL_Track[];
+  audio: DL_Track[];
+  subtitle: DL_Track[];
 }
 
 interface DL_Track {
   type: TrackType;
   segments: DL_Segment[];
+  tmpDir: string;
+  name: string;
+  ext: string;
   file: string;
+  codec?: string;
   bitrate?: Bitrate;
   quality?: string;
   language?: string;
   label?: string;
+  fps?: number;
+  defaultKeyId?: string;
+  decrypted?: string;
 }
 
 interface DL_Segment {
   url: string;
+  tmpDir: string;
+  name: string;
+  ext: string;
   file: string;
   stat: Stat;
 }
 
-class Downloader {
-  #options: DL_Options;
+type DL_Manifest =
+  | string
+  | {
+      url?: string;
+      text?: string;
+      keys?: string | string[];
+    };
 
-  constructor(options?: DL_Options) {
-    this.#options = Object.assign({}, defaultDlOptions, options);
+class Downloader {
+  #config: DL_Config;
+
+  constructor(config?: DL_Config) {
+    this.#config = Object.assign({}, defaultDlConfig, config);
   }
 
-  async download(url: string, outFile: string, handler: DL_Handler = () => {}): Promise<DL_Video> {
-    const { logger } = this.#options;
+  async download(manifest: DL_Manifest, outFile: string, handler?: DL_Handler): Promise<DL_Video> {
+    const { logger } = this.#config;
 
     // get video info
-    const dlVideo = await this.#getDlVideo(url, outFile, handler);
-    dlVideo.handler(DL_Event.VIDEO_INFO, { video_info: dlVideo });
+    const dlVideo = await this.#getDlVideo(manifest, outFile, handler);
+    dlVideo.handler?.(DL_Event.VIDEO_INFO, { video_info: dlVideo });
 
     // create temporary directory
     fs.mkdirSync(dlVideo.tmpDir, { recursive: true });
 
     // download video track
-    logger?.group(`Downloading Video Track (${dlVideo.video[0].quality})...`);
+    logger?.group(`Download Video Track (${dlVideo.video[0].quality})...`);
     await this.#downloadTrack(dlVideo.video[0], dlVideo);
     logger?.groupEnd();
 
     // download audio tracks
     for (let i = 0; i < dlVideo.audio.length; i++) {
-      logger?.group(`Downloading Audio Tracks (${i + 1}/${dlVideo.audio.length})...`);
+      logger?.group(`Download Audio Tracks (${i + 1}/${dlVideo.audio.length})...`);
       await this.#downloadTrack(dlVideo.audio[i], dlVideo);
       logger?.groupEnd();
     }
 
     // download subtitle tracks
     for (let i = 0; i < dlVideo.subtitle.length; i++) {
-      logger?.group(`Downloading Subtitle Tracks (${i + 1}/${dlVideo.subtitle.length})...`);
+      logger?.group(`Download Subtitle Tracks (${i + 1}/${dlVideo.subtitle.length})...`);
       await this.#downloadTrack(dlVideo.subtitle[i], dlVideo);
       logger?.groupEnd();
     }
 
-    // multiplex tracks
-    logger?.group(`Multiplexing Tracks...`);
-    await this.#multiplexingTracks(dlVideo);
-    logger?.groupEnd();
+    // decrypt video & audio tracks
+    if (this.#isBinAvailable(dlVideo.ffmpegPath)) {
+      if (Array.isArray(dlVideo.keys) && dlVideo.keys.length > 0) {
+        await this.#decryptTracks(dlVideo);
+      }
+    }
+
+    // convert subtitle tracks to srt, and remove duplicate subtitles
+    await this.#processSubtitles(dlVideo);
+
+    // multiplex or output tracks
+    if (this.#isBinAvailable(dlVideo.ffmpegPath)) {
+      logger?.group(`Multiplex Tracks...`);
+      await this.#multiplexingTracks(dlVideo);
+      logger?.groupEnd();
+    } else {
+      logger?.log("FFmpeg Invalid, Output Tracks...");
+      [].concat(dlVideo.video, dlVideo.audio, dlVideo.subtitle).forEach((track) => {
+        const file = path.resolve(dlVideo.dir, `${track.name}${track.ext}`);
+        fs.copyFileSync(track.file, file);
+      });
+    }
 
     // clean temporary directory
     if (dlVideo.clean) {
@@ -132,26 +175,40 @@ class Downloader {
     return dlVideo;
   }
 
-  parse(url: string, outFile: string): Promise<DL_Video> {
-    return this.#getDlVideo(url, outFile);
+  parse(manifest: DL_Manifest, outFile: string): Promise<DL_Video> {
+    return this.#getDlVideo(manifest, outFile);
   }
 
-  async #getDlVideo(url: string, outFile: string, handler: DL_Handler = () => {}): Promise<DL_Video> {
-    const { logger } = this.#options;
+  async #getDlVideo(manifest: DL_Manifest, outFile: string, handler?: DL_Handler): Promise<DL_Video> {
+    const { logger } = this.#config;
 
     // path
-    let { dir, name, ext } = path.parse(outFile);
-    dir ||= this.#options.outDir;
+    let { dir, name, ext } = path.parse(path.resolve(outFile));
+    dir ||= path.resolve(this.#config.outDir);
     const tmpDir = path.resolve(dir, `tmp-${name}`);
     const file = path.resolve(dir, `${name}${ext}`);
 
+    // manifest
+    const dlManifest: DL_Manifest =
+      typeof manifest === "string"
+        ? manifest.startsWith("http")
+          ? { url: manifest }
+          : { text: manifest }
+        : manifest || {};
+    let { text, url, keys } = dlManifest;
+    if (!text && !url) throw new Error("Invalid manifest");
+    if (!text) text = await fetch(url).then((r) => r.text());
+
+    // decryption keys
+    if (typeof keys === "string") keys = [keys];
+    else if (Array.isArray(keys)) keys = keys;
+
     // parse manifest
-    logger?.group(`Parsing Manifest...`);
-    logger?.log("URL:", url);
+    logger?.group(`Parse Manifest...`);
+    logger?.log("Manifest:", manifest);
     logger?.log("Path:", file);
-    const body = await fetch(url).then((r) => r.text());
-    const manifest = await parseManifest(body, url);
-    const { videos, audios, subtitles } = manifest.tracks;
+    const parsedManifest = await parseManifest(text, url);
+    const { videos, audios, subtitles } = parsedManifest.tracks;
     logger?.group(`Tracks:`);
     logger?.log("Videos:", videos.map((track) => track.quality).join(", "));
     logger?.log("Audios:", audios.map((track) => `${track.language}`).join(", "));
@@ -175,9 +232,9 @@ class Downloader {
 
     // video index
     const videoIndex =
-      this.#options.quality === "highest"
+      this.#config.quality === "highest"
         ? 0
-        : this.#options.quality === "lowest"
+        : this.#config.quality === "lowest"
         ? videos.length - 1
         : Math.round(videos.length / 2);
 
@@ -187,28 +244,33 @@ class Downloader {
     const subtitleTracks = subtitles.map((track, index) => this.#getDlTrack(TrackType.SUBTITLE, track, index, tmpDir));
 
     return {
-      ...this.#options,
+      ...this.#config,
       url,
+      text,
+      keys,
       handler,
-      manifest,
-      video: videoTracks,
-      audio: audioTracks,
-      subtitle: subtitleTracks,
-      tmpDir,
+      manifest: parsedManifest,
+      dir,
       name,
       ext,
       file,
+      tmpDir,
+      video: videoTracks,
+      audio: audioTracks,
+      subtitle: subtitleTracks,
     };
   }
 
   #getDlTrack(type: TrackType, track: Track, trackIndex: number, tmpDir: string): DL_Track {
+    const { codec, bitrate, quality, language, label, fps, protection } = track as any;
     const segments: DL_Segment[] = track.segments.map((segment, index) =>
       this.#getDlSegment(type, trackIndex, segment, index, tmpDir)
     );
+    const name = `${type}${trackIndex}_${quality || language}_${codec}`;
     const ext = path.extname(segments[0].file);
-    const file = path.resolve(tmpDir, `${type}${trackIndex}${ext}`);
-    const { bitrate, quality, language, label } = track as any;
-    return { type, segments, file, bitrate, quality, language, label };
+    const file = path.resolve(tmpDir, `${name}${ext}`);
+    const defaultKeyId = protection?.common?.defaultKeyId?.replace?.(/\-/g, "");
+    return { type, segments, tmpDir, name, ext, file, codec, bitrate, quality, language, label, fps, defaultKeyId };
   }
 
   #getDlSegment(
@@ -219,15 +281,16 @@ class Downloader {
     tmpDir: string
   ): DL_Segment {
     const { url } = segment;
-    const name = `${type}${trackIndex}_Segment${segmentIndex + 1}`;
+    const name = `${type}${trackIndex}_Segment${segmentIndex}`;
     const ext = path.extname(new URL(url).pathname);
     const file = path.resolve(tmpDir, `${name}${ext}`);
     const stat = Stat.WAITING;
-    return { url, file, stat };
+    return { url, tmpDir, name, ext, file, stat };
   }
 
   async #downloadTrack(dlTrack: DL_Track, dlVideo: DL_Video) {
-    const { logger } = this.#options;
+    if (fs.existsSync(dlTrack.file)) return;
+    const { logger } = this.#config;
 
     // download segments
     const queue = [];
@@ -245,9 +308,10 @@ class Downloader {
   }
 
   async #downloadSegment(dlSegments: DL_Segment[], onDownloaded: () => void) {
-    const { logger } = this.#options;
+    const { logger } = this.#config;
     const dlSegment = dlSegments.find(({ stat }) => stat === Stat.WAITING);
     if (!dlSegment) return;
+    // /* DEBUG */ if (fs.existsSync(dlSegment.file)) return this.#downloadSegment(dlSegments, onDownloaded);
     try {
       dlSegment.stat = Stat.DOWNLOADING;
       const response = await fetch(dlSegment.url);
@@ -257,15 +321,15 @@ class Downloader {
       dlSegment.stat = Stat.DOWNLOADED;
       onDownloaded();
     } catch (error) {
-      dlSegment.stat = Stat.WAITING; // reset to waiting
-      logger?.error(`${path.basename(dlSegment.file)} download failed: ${error}, retrying...`);
+      dlSegment.stat = Stat.WAITING;
+      logger?.error(`${path.basename(dlSegment.file)} download failed: ${error}, retry...`);
     }
     // next task
     return this.#downloadSegment(dlSegments, onDownloaded);
   }
 
   async #concatSegments(dlTrack: DL_Track, dlVideo: DL_Video) {
-    const { logger } = this.#options;
+    const { logger } = this.#config;
     const { type, segments, file } = dlTrack;
 
     if (segments.length > 1) {
@@ -279,15 +343,111 @@ class Downloader {
     }
   }
 
+  async #decryptTracks(dlVideo: DL_Video) {
+    const { logger } = this.#config;
+    const { video: videoTracks, audio: audioTracks } = dlVideo;
+
+    // decrypt video track
+    logger?.group("Decrypt Video Track...");
+    await this.#decryptTrack(videoTracks[0], dlVideo);
+    logger?.groupEnd();
+
+    // decrypt audios tracks
+    for (let i = 0; i < audioTracks.length; i++) {
+      logger?.group(`Decrypt Audio Tracks (${i + 1}/${audioTracks.length})...`);
+      await this.#decryptTrack(audioTracks[i], dlVideo);
+      logger?.groupEnd();
+    }
+  }
+  async #decryptTrack(track: DL_Track, dlVideo) {
+    const { defaultKeyId, tmpDir, name, ext, file } = track;
+    if (!defaultKeyId) return;
+    const key = this.#findKey(dlVideo.keys as string[], defaultKeyId);
+    if (!key) return;
+    const decrypted = path.resolve(tmpDir, `${name}_decrypted${ext}`);
+    // mp4decrypt --key {aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb} {input} {output}
+    // ffmpeg -decryption_key {bbbbbbbbbbbbbbbb} -i {input} -c copy {output}
+    const args = ["-decryption_key", key, "-i", file, "-c", "copy", decrypted, "-y"];
+    await this.#execBin(this.#config.ffmpegPath, args, dlVideo.handler);
+    track.decrypted = decrypted;
+  }
+  #findKey(keys: string[], keyId: string): string | null {
+    for (let i = 0; i < keys.length; i++) {
+      if (!keys[i].includes(":")) return keys[i];
+      const [, kid, key] = keys[i].match(/(\w+):(\w+)/);
+      if (kid === keyId) return key;
+    }
+    return null;
+  }
+
+  async #processSubtitles(dlVideo: DL_Video) {
+    const { logger } = this.#config;
+
+    // WVTT -> SRT, STPP -> TTML
+    const wvtt_stpp_tracks = dlVideo.subtitle.filter((subtitle) => {
+      return subtitle.codec === "WVTT" || subtitle.codec === "STPP";
+    });
+    if (wvtt_stpp_tracks.length > 0) {
+      if (this.#isBinAvailable(dlVideo.gpacPath)) {
+        logger?.group("Process WVTT/STPP Subtitles...");
+        for (let i = 0; i < wvtt_stpp_tracks.length; i++) {
+          const subtitle = wvtt_stpp_tracks[i];
+          const ext = subtitle.codec === "WVTT" ? ".srt" : ".ttml";
+          const file = path.resolve(subtitle.tmpDir, `${subtitle.name}${ext}`);
+          // gpac.exe -i xxx.mp4 -o xxx.(srt|ttml)
+          const args = ["-i", subtitle.file, "-o", file];
+          await this.#execBin(this.#config.gpacPath, args, dlVideo.handler);
+          subtitle.ext = ext;
+          subtitle.file = file;
+        }
+        logger?.groupEnd();
+      } else {
+        logger?.log("GPAC Invalid, Remove WVTT/STPP Subtitles...");
+        dlVideo.subtitle = dlVideo.subtitle.filter((subtitle) => {
+          return subtitle.codec !== "WVTT" && subtitle.codec !== "STPP";
+        });
+      }
+    }
+
+    // TTML -> SRT
+    const ttml_tracks = dlVideo.subtitle.filter((subtitle) => {
+      return subtitle.codec === "TTML" || subtitle.ext === ".ttml";
+    });
+    if (ttml_tracks.length > 0) {
+      logger?.log("Convert TTML Subtitles to SRT...");
+      for (let i = 0; i < ttml_tracks.length; i++) {
+        const subtitle = ttml_tracks[i];
+        const file = path.resolve(subtitle.tmpDir, `${subtitle.name}.srt`);
+        const ttmlText = fs.readFileSync(subtitle.file, "utf8");
+        const srtText = ttml2srt(ttmlText, dlVideo.video[0].fps);
+        fs.writeFileSync(file, srtText);
+        subtitle.ext = ".srt";
+        subtitle.file = file;
+      }
+    }
+
+    logger?.log("Remove Duplicate Subtitles...");
+    const map = dlVideo.subtitle.reduce((map, subtitle) => {
+      const key = fs
+        .readFileSync(subtitle.file, "utf8")
+        .split("\n")
+        .map((line) => line.trim())
+        .join("");
+      map[key] = subtitle;
+      return map;
+    }, {});
+    dlVideo.subtitle = Object.values(map);
+  }
+
   #multiplexingTracks(dlVideo: DL_Video) {
-    const { logger } = this.#options;
+    const { logger } = this.#config;
     const { video: videoTracks, audio: audioTracks, subtitle: subtitleTracks, file } = dlVideo;
+    const args = [];
 
     // add input tracks
-    const args = [];
-    args.push("-i", videoTracks[0].file); // add video track
-    audioTracks.forEach((track) => args.push("-i", track.file)); // add audio tracks
-    subtitleTracks.forEach((track) => args.push("-i", track.file)); // add subtitle tracks
+    args.push("-i", videoTracks[0].decrypted || videoTracks[0].file); // add video track
+    audioTracks.forEach((track) => args.push("-i", track.decrypted || track.file)); // add audio tracks
+    subtitleTracks.forEach((track) => args.push("-i", track.decrypted || track.file)); // add subtitle tracks
 
     // map tracks
     logger?.log(`Map Video Track`);
@@ -340,33 +500,47 @@ class Downloader {
     // output
     args.push(file, "-y");
 
-    return this.#execFFmpeg(args, dlVideo);
+    return this.#execBin(this.#config.ffmpegPath, args, dlVideo.handler);
   }
 
-  #execFFmpeg(args: string[], dlVideo: DL_Video): Promise<number> {
+  #execBin(binPath: string, args: string[], handler?: DL_Handler): Promise<number> {
     return new Promise((resolve, reject) => {
-      const { logger } = this.#options;
-      const { dir: cwd, base: command } = path.parse(dlVideo.ffmpegPath);
-      logger?.group("Executing FFmpeg...");
+      const { logger } = this.#config;
+
+      const { dir: cwd, base: command } = path.parse(binPath);
+      logger?.group("Spawn Child Process...");
       logger?.log(`Command: ${command} ${args.join(" ")}`);
       const process = spawn(command, args, { cwd });
-      dlVideo.handler(DL_Event.FFMPEG_SPAWN, { process, cwd, command, args });
+      handler?.(DL_Event.CHILD_PROCESS_SPAWN, { process, cwd, command, args });
+
       process.on("close", (code) => {
         logger?.log(`Code: ${code}`);
         logger?.groupEnd();
-        dlVideo.handler(DL_Event.FFMPEG_CLOSE, { code });
+        handler?.(DL_Event.CHILD_PROCESS_CLOSE, { code, cwd, command, args });
         resolve(code);
       });
+
       process.on("error", (error) => {
         logger?.error(`Failed: ${error}`);
         logger?.groupEnd();
-        dlVideo.handler(DL_Event.FFMPEG_ERROR, { error });
+        handler?.(DL_Event.CHILD_PROCESS_ERROR, { error, cwd, command, args });
         reject(error);
       });
+
+      process.stdout.on("data", (data) => {
+        handler?.(DL_Event.CHILD_PROCESS_STDOUT, { data, cwd, command, args });
+      });
+
       process.stderr.on("data", (data) => {
-        dlVideo.handler(DL_Event.FFMPEG_DATA, { data });
+        handler?.(DL_Event.CHILD_PROCESS_STDERR, { data, cwd, command, args });
       });
     });
+  }
+
+  #isBinAvailable(binPath: string) {
+    if (fs.existsSync(binPath)) return true;
+    if (new RegExp(path.parse(binPath).name, "i").test(process.env.Path)) return true;
+    return false;
   }
 }
 

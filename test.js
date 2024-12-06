@@ -6,7 +6,7 @@ const Downloader = require("./");
 
 const dl = new Downloader({
   ffmpegPath: "./bin/ffmpeg.exe",
-  // quality: "highest", // "highest" | "medium" | "lowest"
+  quality: "lowest", // "highest" | "medium" | "lowest"
   // concurrency: 5,
   // videoCodec: "copy",
   // audioCodec: "copy",
@@ -41,20 +41,26 @@ const dl = new Downloader({
 // });
 
 dl.download(DASH, "./DASH.mkv").then((video_info) => {
-  console.log(video_info);
+  // console.log(video_info);
 });
+
+// dl.download(HLS, "./HLS.mkv").then((video_info) => {
+//   // console.log(video_info);
+// });
 
 // dl.download(DASH, "./DASH.mkv", (event, data) => {
 //   if (event === "video_info") {
 //     const { video_info } = data;
-//   } else if (event === "ffmpeg_spawn") {
+//   } else if (event === "child_process_spawn") {
 //     const { process, cwd, command, args } = data;
-//   } else if (event === "ffmpeg_data") {
-//     // console.log(`Stderr: ${data.data}`);
-//   } else if (event === "ffmpeg_close") {
+//   } else if (event === "child_process_close") {
 //     const { code } = data;
-//   } else if (event === "ffmpeg_error") {
+//   } else if (event === "child_process_error") {
 //     const { error } = data;
+//   } else if (event === "child_process_stdout") {
+//     // console.log(`stdout: ${data.data}`);
+//   } else if (event === "child_process_stderr") {
+//     // console.log(`stderr: ${data.data}`);
 //   }
 // });
 

@@ -1,12 +1,13 @@
 {
   "name": "hls-dash-dl",
-  "version": "1.2.5",
+  "version": "2.0.0",
   "description": "HLS(.m3u8) and DASH(.mpd) video streaming download tool.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsup",
-    "test": "node test.js"
+    "test": "node test.js",
+    "test_decrypt": "node test_decrypt.js"
   },
   "keywords": [
     "hls",
@@ -37,6 +38,7 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "dasha": "^3.1.0"
+    "dasha": "^3.1.4",
+    "ttml2srt": "^1.2.4"
   }
 }
